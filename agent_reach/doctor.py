@@ -13,6 +13,12 @@ from agent_reach.config import Config
 from agent_reach.utils.text import scrub_url_credentials
 
 
+def _english_enabled() -> bool:
+    import os
+    value = os.environ.get("AGENT_REACH_LANG", "").strip().lower()
+    return value.startswith("en") or value.startswith("english")
+
+
 def check_all(config: Config) -> Dict[str, dict]:
     """Check all channels and return status dict.
 
@@ -56,17 +62,18 @@ def _name_msg(r: dict, escape) -> str:
 
 def format_report(results: Dict[str, dict]) -> str:
     """Format results as a readable text report (with Rich markup)."""
+    english = _english_enabled()
     lines = []
-    lines.append("[bold cyan]Agent Reach 状态[/bold cyan]")
+    lines.append("[bold cyan]Agent Reach Status[/bold cyan]" if english else "[bold cyan]Agent Reach 状态[/bold cyan]")
     lines.append("[cyan]" + "=" * 40 + "[/cyan]")
-    lines.append("图例：[green]✅[/green] 可用  [yellow][!][/yellow] 已装但需配置/登录  [red][X][/red] 未安装")
+    lines.append("[green]✅[/green] Available  [yellow][!][/yellow] Installed but needs configuration/login  [red][X][/red] Not installed" if english else "图例：[green]✅[/green] 可用  [yellow][!][/yellow] 已装但需配置/登录  [red][X][/red] 未安装")
 
     ok_count = sum(1 for r in results.values() if r["status"] == "ok")
     total = len(results)
 
     # Tier 0 — zero config
     lines.append("")
-    lines.append("[bold]✅ 装好即用：[/bold]")
+    lines.append("[bold]✅ Ready to use:[/bold]" if english else "[bold]✅ 装好即用：[/bold]")
     for key, r in results.items():
         if r["tier"] == 0:
             name_msg = _name_msg(r, escape)
@@ -83,7 +90,7 @@ def format_report(results: Dict[str, dict]) -> str:
     tier1_inactive = {k: r for k, r in tier1.items() if r["status"] != "ok"}
     if tier1_active:
         lines.append("")
-        lines.append("[bold]可选渠道（已安装）：[/bold]")
+        lines.append("[bold]Optional channels (installed):[/bold]" if english else "[bold]可选渠道（已安装）：[/bold]")
         for key, r in tier1_active.items():
             lines.append(f"  [green]✅[/green] {_name_msg(r, escape)}")
 
@@ -94,13 +101,13 @@ def format_report(results: Dict[str, dict]) -> str:
     if tier2_active:
         if not tier1_active:
             lines.append("")
-            lines.append("[bold]可选渠道（已安装）：[/bold]")
+            lines.append("[bold]Optional channels (installed):[/bold]" if english else "[bold]可选渠道（已安装）：[/bold]")
         for key, r in tier2_active.items():
             lines.append(f"  [green]✅[/green] {_name_msg(r, escape)}")
 
     lines.append("")
     status_color = "green" if ok_count == total else ("yellow" if ok_count > 0 else "red")
-    lines.append(f"状态：[{status_color}]{ok_count}/{total}[/{status_color}] 个渠道可用")
+    lines.append(f"Status: [{status_color}]{ok_count}/{total}[/{status_color}] channels available" if english else f"状态：[{status_color}]{ok_count}/{total}[/{status_color}] 个渠道可用")
 
     # Summarize inactive optional channels in one line instead of listing each
     all_inactive = list(tier1_inactive.values()) + list(tier2_inactive.values())
