@@ -203,6 +203,25 @@ def test_english_doctor_report_contains_no_cjk(monkeypatch):
     assert "Agent Reach Status" in report
 
 
+def test_english_report_hides_untranslated_active_backend(monkeypatch):
+    monkeypatch.setenv("AGENT_REACH_LANG", "en")
+    report = doctor.format_report(
+        {
+            "bilibili": {
+                "status": "ok",
+                "name": "B站视频、字幕和搜索",
+                "message": "Backend is available.",
+                "tier": 1,
+                "backends": ["B站搜索 API", "OpenCLI"],
+                "active_backend": "B站搜索 API",
+            }
+        }
+    )
+
+    assert "active backend configured" in report
+    assert not any("\u4e00" <= char <= "\u9fff" for char in report)
+
+
 def _snapshot_user_roots() -> tuple:
     entries = []
     seen = set()

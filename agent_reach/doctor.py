@@ -123,7 +123,11 @@ def _name_msg(r: dict, escape) -> str:
     text = f"[bold]{escape(name)}[/bold] — {escape(message)}"
     active = r.get("active_backend")
     if active and len(r.get("backends", [])) > 1:
-        suffix = f" [dim](active backend: {escape(active)})[/dim]" if _english_enabled() else f" [dim]（当前后端：{escape(active)}）[/dim]"
+        suffix = (
+            " [dim](active backend configured)[/dim]"
+            if _english_enabled()
+            else f" [dim]（当前后端：{escape(active)}）[/dim]"
+        )
         text += suffix
     return text
 
