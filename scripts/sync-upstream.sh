@@ -1,72 +1,36 @@
-#!/bin/bash
-# sync-upstream.sh — Sync channel implementations from upstream tools
-#
-# Usage: ./scripts/sync-upstream.sh
-#
-# This script checks for updates in x-reader's fetchers/ directory
-# and shows which files have changed. You can then manually review
-# and merge the changes.
+#!/usr/bin/env bash
+# Fetch upstream and report changes without merging or modifying tracked files.
+set -euo pipefail
 
-set -e
+UPSTREAM_REMOTE="${UPSTREAM_REMOTE:-upstream}"
+UPSTREAM_BRANCH="${UPSTREAM_BRANCH:-main}"
 
-UPSTREAM_REPO="runesleo/x-reader"
-UPSTREAM_BRANCH="main"
-UPSTREAM_DIR="x_reader/fetchers"
-LOCAL_DIR="agent_reach/channels"
+git remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1 || {
+  echo "Missing Git remote: $UPSTREAM_REMOTE" >&2
+  exit 1
+}
 
-echo "👁️ Agent Reach — Upstream Sync"
-echo "Checking for updates from $UPSTREAM_REPO..."
-echo ""
+echo "Fetching $UPSTREAM_REMOTE/$UPSTREAM_BRANCH..."
+git fetch "$UPSTREAM_REMOTE" "$UPSTREAM_BRANCH"
 
-# Create temp dir for upstream code
-TMPDIR=$(mktemp -d)
-trap "rm -rf $TMPDIR" EXIT
+upstream_ref="$UPSTREAM_REMOTE/$UPSTREAM_BRANCH"
+echo "Current branch: $(git branch --show-current)"
+echo "Upstream:       $upstream_ref"
+echo
 
-# Clone upstream (shallow)
-git clone --depth 1 --branch "$UPSTREAM_BRANCH" \
-    "https://github.com/$UPSTREAM_REPO.git" "$TMPDIR/upstream" 2>/dev/null
+echo "Changed files since upstream:"
+git diff --stat HEAD "$upstream_ref" -- || true
+echo
 
-if [ ! -d "$TMPDIR/upstream/$UPSTREAM_DIR" ]; then
-    echo "❌ Upstream directory not found: $UPSTREAM_DIR"
-    echo "   x-reader may have changed their structure."
-    exit 1
-fi
-
-# Compare each file
-echo "Comparing files..."
-echo ""
-
-CHANGES=0
-for upstream_file in "$TMPDIR/upstream/$UPSTREAM_DIR"/*.py; do
-    filename=$(basename "$upstream_file")
-    local_file="$LOCAL_DIR/$filename"
-    
-    if [ ! -f "$local_file" ]; then
-        echo "🆕 NEW: $filename (exists in upstream but not locally)"
-        CHANGES=$((CHANGES + 1))
-        continue
-    fi
-    
-    # Compare (ignoring import path differences)
-    if ! diff -q <(sed 's/x_reader\.fetchers/agent_reach.channels/g' "$upstream_file") "$local_file" > /dev/null 2>&1; then
-        echo "📝 CHANGED: $filename"
-        diff --color -u <(sed 's/x_reader\.fetchers/agent_reach.channels/g' "$upstream_file") "$local_file" | head -20
-        echo "   ..."
-        echo ""
-        CHANGES=$((CHANGES + 1))
-    fi
-done
-
-if [ $CHANGES -eq 0 ]; then
-    echo "✅ All channels are up to date with upstream!"
+if git merge-base --is-ancestor "$upstream_ref" HEAD; then
+  echo "Local branch includes the current upstream commit."
+elif git merge-base --is-ancestor HEAD "$upstream_ref"; then
+  echo "Upstream is ahead by:"
+  git log --oneline HEAD.."$upstream_ref"
 else
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "$CHANGES file(s) have upstream changes."
-    echo ""
-    echo "To merge a specific file:"
-    echo "  cp $TMPDIR/upstream/$UPSTREAM_DIR/FILENAME.py $LOCAL_DIR/FILENAME.py"
-    echo "  sed -i 's/x_reader\\.fetchers/agent_reach.channels/g' $LOCAL_DIR/FILENAME.py"
-    echo ""
-    echo "Then review changes, run tests, and commit."
+  echo "Branches have diverged. Review before merging:"
+  git log --oneline --left-right --decorate HEAD..."$upstream_ref"
 fi
+
+echo
+echo "No merge, rebase, reset, or file overwrite was performed."
