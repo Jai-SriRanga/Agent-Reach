@@ -19,6 +19,69 @@ def _english_enabled() -> bool:
     return value.startswith("en") or value.startswith("english")
 
 
+_ENGLISH_NAMES = {
+    "GitHub 仓库和代码": "GitHub repositories and code",
+    "YouTube 视频和字幕": "YouTube videos and subtitles",
+    "V2EX 节点、主题与回复": "V2EX nodes, topics, and replies",
+    "RSS/Atom 订阅源": "RSS/Atom feeds",
+    "全网语义搜索": "Semantic web search",
+    "任意网页": "Any web page",
+    "Twitter/X 推文": "Twitter/X posts",
+    "Reddit 帖子和评论": "Reddit posts and comments",
+    "Facebook 帖子、主页和群组": "Facebook posts, pages, and groups",
+    "Instagram 用户、主页和指定用户帖子": "Instagram users, profiles, and posts",
+    "B站视频、字幕和搜索": "Bilibili videos, subtitles, and search",
+    "小红书笔记": "Xiaohongshu notes",
+    "小宇宙播客转文字": "Xiaoyuzhou podcast transcription",
+    "雪球股票行情与社区动态": "Xueqiu market data and community posts",
+    "LinkedIn 职业社交": "LinkedIn professional networking",
+    "Boss直聘 职位搜索与 JD": "Boss Zhipin job search and job descriptions",
+}
+
+
+def _localize(name: str, message: str) -> tuple[str, str]:
+    if not _english_enabled():
+        return name, message
+    replacements = {
+        "体检异常：": "Doctor error: ",
+        "公开 API 可用": "Public API available",
+        "连接失败（可能需要代理）": "Connection failed (a proxy may be required)",
+        "未安装": "Not installed",
+        "已安装": "Installed",
+        "需要配置/登录": "needs configuration/login",
+        "需要人工审批": "requires manual approval",
+        "需要登录态": "requires a login session",
+        "需要代理": "requires a proxy",
+        "安装：": "Install: ",
+        "运行：": "Run: ",
+        "未配置": "not configured",
+        "未检测到": "not detected",
+        "无法安全读取": "cannot be read safely",
+        "当前不标记为可用": "not marked as available",
+        "可读取": "can read",
+        "完整功能建议": "For full functionality, install",
+        "还有": "There are",
+        "个可选渠道可以解锁": " optional channels available to unlock",
+        "告诉你的 Agent": "Tell your Agent",
+    }
+    for source, target in replacements.items():
+        message = message.replace(source, target)
+    return _ENGLISH_NAMES.get(name, name), message
+
+
+def _english_status_message(status: str, message: str) -> str:
+    """Avoid leaking untranslated adapter text into an English report."""
+    if not _english_enabled() or not any("\u4e00" <= char <= "\u9fff" for char in message):
+        return message
+    if status == "ok":
+        return "Backend is available."
+    if status == "warn":
+        return "Backend is installed but needs configuration or login."
+    if status == "off":
+        return "Backend is not installed."
+    return "Backend check failed."
+
+
 def check_all(config: Config) -> Dict[str, dict]:
     """Check all channels and return status dict.
 
@@ -40,9 +103,11 @@ def check_all(config: Config) -> Dict[str, dict]:
         # messages and unexpected exceptions. Upstream probe output can echo a
         # configured URL, so scrub every path before JSON/text rendering.
         message = scrub_url_credentials(message)
+        name, message = _localize(ch.description, message)
+        message = _english_status_message(status, message)
         results[ch.name] = {
             "status": status,
-            "name": ch.description,
+            "name": name,
             "message": message,
             "tier": ch.tier,
             "backends": ch.backends,
@@ -114,7 +179,10 @@ def format_report(results: Dict[str, dict]) -> str:
     if all_inactive:
         names = [r["name"] for r in all_inactive]
         lines.append(
-            f"还有 {len(names)} 个可选渠道可以解锁（{'、'.join(names)}），"
+            f"{len(names)} optional channels can be unlocked ({', '.join(names)}). "
+            "Tell your Agent to install the channel."
+            if english
+            else f"还有 {len(names)} 个可选渠道可以解锁（{'、'.join(names)}），"
             "告诉你的 Agent「帮我装 XXX」即可"
         )
 
