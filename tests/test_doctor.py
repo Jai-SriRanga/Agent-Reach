@@ -183,6 +183,26 @@ def test_channel_success_message_credentials_are_scrubbed(monkeypatch):
     assert "https://***@example.test/data?api_key=***" in message
 
 
+def test_english_doctor_report_contains_no_cjk(monkeypatch):
+    """English mode must not leak adapter-localized Chinese text."""
+    monkeypatch.setenv("AGENT_REACH_LANG", "en")
+    report = doctor.format_report(
+        {
+            "github": {
+                "status": "warn",
+                "name": "GitHub 仓库和代码",
+                "message": "gh CLI 未安装。安装：https://cli.github.com",
+                "tier": 0,
+                "backends": ["gh"],
+            }
+        }
+    )
+
+    assert not any("\u4e00" <= char <= "\u9fff" for char in report)
+    assert "GitHub repositories and code" in report
+    assert "Agent Reach Status" in report
+
+
 def _snapshot_user_roots() -> tuple:
     entries = []
     seen = set()

@@ -118,10 +118,13 @@ def check_all(config: Config) -> Dict[str, dict]:
 
 def _name_msg(r: dict, escape) -> str:
     """Render one channel line; show the active backend when there is a choice."""
-    text = f"[bold]{escape(r['name'])}[/bold] — {escape(r['message'])}"
+    name, message = _localize(r["name"], r["message"])
+    message = _english_status_message(r["status"], message)
+    text = f"[bold]{escape(name)}[/bold] — {escape(message)}"
     active = r.get("active_backend")
     if active and len(r.get("backends", [])) > 1:
-        text += f" [dim]（当前后端：{escape(active)}）[/dim]"
+        suffix = f" [dim](active backend: {escape(active)})[/dim]" if _english_enabled() else f" [dim]（当前后端：{escape(active)}）[/dim]"
+        text += suffix
     return text
 
 
@@ -177,7 +180,7 @@ def format_report(results: Dict[str, dict]) -> str:
     # Summarize inactive optional channels in one line instead of listing each
     all_inactive = list(tier1_inactive.values()) + list(tier2_inactive.values())
     if all_inactive:
-        names = [r["name"] for r in all_inactive]
+        names = [_ENGLISH_NAMES.get(r["name"], r["name"]) if english else r["name"] for r in all_inactive]
         lines.append(
             f"{len(names)} optional channels can be unlocked ({', '.join(names)}). "
             "Tell your Agent to install the channel."
@@ -197,7 +200,9 @@ def format_report(results: Dict[str, dict]) -> str:
             if mode & (stat.S_IRGRP | stat.S_IROTH):
                 lines.append("")
                 lines.append(
-                    "[bold red][!]  安全提示：config.yaml 权限过宽（其他用户可读）[/bold red]"
+                    "[bold red][!] Security warning: config.yaml is readable by other users[/bold red]"
+                    if english
+                    else "[bold red][!]  安全提示：config.yaml 权限过宽（其他用户可读）[/bold red]"
                 )
                 lines.append("   修复：chmod 600 ~/.agent-reach/config.yaml")
         except OSError:
